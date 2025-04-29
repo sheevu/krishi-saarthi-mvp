@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 
 export default function Home() {
   const [lang, setLang] = useState('hi-IN');
-  const [messages, setMessages] = useState([]); // { sender: 'user'|'bot', text }
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const fileInputRef = useRef();
   const [recording, setRecording] = useState(false);
@@ -12,8 +12,7 @@ export default function Home() {
   // Send text chat
   const sendMessage = async (text) => {
     if (!text) return;
-    const userMsg = { sender: 'user', text };
-    setMessages((m) => [...m, userMsg]);
+    setMessages((m) => [...m, { sender: 'user', text }]);
     setInput('');
     try {
       const res = await fetch('/api/agent/chat', {
@@ -21,10 +20,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [
-            ...messages.map((m) => ({
-              role: m.sender === 'user' ? 'user' : 'assistant',
-              content: m.text
-            })),
+            ...messages.map((m) => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text })),
             { role: 'user', content: text }
           ],
           lang
@@ -32,16 +28,12 @@ export default function Home() {
       });
       const { reply } = await res.json();
       setMessages((m) => [...m, { sender: 'bot', text: reply }]);
-      // Speak it
       const utter = new SpeechSynthesisUtterance(reply);
       utter.lang = lang;
       speechSynthesis.speak(utter);
     } catch (err) {
       console.error(err);
-      setMessages((m) => [
-        ...m,
-        { sender: 'bot', text: '⚠️ Error contacting API' }
-      ]);
+      setMessages((m) => [...m, { sender: 'bot', text: '⚠️ Error contacting API' }]);
     }
   };
 
@@ -52,20 +44,18 @@ export default function Home() {
   const handleImageUpload = async () => {
     const file = fileInputRef.current.files[0];
     if (!file) return alert('Select an image first');
-    setMessages((m) => [
-      ...m,
-      { sender: 'user', text: `Uploaded image: ${file.name}` }
-    ]);
-   const fd = new FormData();
-fd.append('audio', blob);
-try {
-  const sttRes = await fetch('/api/agent/stt', { method: 'POST', body: fd });
-  const { text } = await sttRes.json();
-  setMessages((m) => [...m, { sender: 'bot', text: `Transcribed: ${text}` }]);
-  await sendMessage(text);
-} catch (err) {
-  setMessages((m) => [...m, { sender: 'bot', text: '⚠️ Error transcribing audio' }]);
-}
+    setMessages((m) => [...m, { sender: 'user', text: `Uploaded image: ${file.name}` }]);
+    const fd = new FormData();
+    fd.append('image', file);
+    try {
+      const res = await fetch('/api/agent/disease', { method: 'POST', body: fd });
+      const { diagnosis } = await res.json();
+      setMessages((m) => [...m, { sender: 'bot', text: diagnosis }]);
+    } catch (err) {
+      console.error(err);
+      setMessages((m) => [...m, { sender: 'bot', text: '⚠️ Error analyzing image' }]);
+    }
+  };
 
   // Voice recording
   const startRecording = async () => {
@@ -76,10 +66,20 @@ try {
     mr.ondataavailable = (e) => setAudioChunks((c) => [...c, e.data]);
     mr.start();
   };
+
+  // Stop recording, transcribe, then chat
   const stopRecording = () => {
     setRecording(false);
     const mr = mediaRecorderRef.current;
     mr.onstop = async () => {
+      // Only build a blob if we actually recorded audio chunks
+      if (audioChunks.length === 0) {
+        setMessages((m) => [
+          ...m,
+          { sender: 'bot', text: '⚠️ No audio recorded. Please try again.' }
+        ]);
+        return;
+      }
       const blob = new Blob(audioChunks, { type: 'audio/webm' });
       setAudioChunks([]);
       setMessages((m) => [...m, { sender: 'user', text: '🎤 (voice message)' }]);
@@ -92,10 +92,7 @@ try {
         await sendMessage(text);
       } catch (err) {
         console.error(err);
-        setMessages((m) => [
-          ...m,
-          { sender: 'bot', text: '⚠️ Error transcribing audio' }
-        ]);
+        setMessages((m) => [...m, { sender: 'bot', text: '⚠️ Error transcribing audio' }]);
       }
     };
     mr.stop();
@@ -105,7 +102,8 @@ try {
     <div style={{ maxWidth: 600, margin: 'auto', padding: 20, fontFamily: 'sans-serif' }}>
       <h1>Kisaan Sathi GPT</h1>
       <div>
-        <label>Language:&nbsp;
+        <label>
+          Language:&nbsp;
           <select value={lang} onChange={(e) => setLang(e.target.value)}>
             <option value="hi-IN">Hindi</option>
             <option value="awa-IN">Awadhi</option>
@@ -114,18 +112,30 @@ try {
         </label>
       </div>
 
-      <div style={{
-        border: '1px solid #ccc', borderRadius: 4, height: 400,
-        overflowY: 'scroll', padding: 10, marginTop: 10, background: '#fafafa'
-      }}>
+      <div
+        style={{
+          border: '1px solid #ccc',
+          borderRadius: 4,
+          height: 400,
+          overflowY: 'scroll',
+          padding: 10,
+          marginTop: 10,
+          background: '#fafafa'
+        }}
+      >
         {messages.map((m, i) => (
-          <div key={i}
-               style={{ textAlign: m.sender === 'user' ? 'right' : 'left', margin: '8px 0' }}>
-            <span style={{
-              display: 'inline-block', padding: '6px 10px',
-              borderRadius: 4,
-              background: m.sender === 'user' ? '#d1e7dd' : '#e2e3e5'
-            }}>
+          <div
+            key={i}
+            style={{ textAlign: m.sender === 'user' ? 'right' : 'left', margin: '8px 0' }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                padding: '6px 10px',
+                borderRadius: 4,
+                background: m.sender === 'user' ? '#d1e7dd' : '#e2e3e5'
+              }}
+            >
               {m.text}
             </span>
           </div>
@@ -149,10 +159,11 @@ try {
       </div>
 
       <div style={{ marginTop: 10 }}>
-        {!recording
-          ? <button onClick={startRecording}>🎤 Start Recording</button>
-          : <button onClick={stopRecording}>⏹️ Stop Recording</button>
-        }
+        {!recording ? (
+          <button onClick={startRecording}>🎤 Start Recording</button>
+        ) : (
+          <button onClick={stopRecording}>⏹️ Stop Recording</button>
+        )}
       </div>
     </div>
   );
