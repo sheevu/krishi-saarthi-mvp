@@ -56,20 +56,16 @@ export default function Home() {
       ...m,
       { sender: 'user', text: `Uploaded image: ${file.name}` }
     ]);
-    const fd = new FormData();
-    fd.append('image', file);
-    try {
-      const res = await fetch('/api/agent/disease', { method: 'POST', body: fd });
-      const { diagnosis } = await res.json();
-      setMessages((m) => [...m, { sender: 'bot', text: diagnosis }]);
-    } catch (err) {
-      console.error(err);
-      setMessages((m) => [
-        ...m,
-        { sender: 'bot', text: '⚠️ Error analyzing image' }
-      ]);
-    }
-  };
+   const fd = new FormData();
+fd.append('audio', blob);
+try {
+  const sttRes = await fetch('/api/agent/stt', { method: 'POST', body: fd });
+  const { text } = await sttRes.json();
+  setMessages((m) => [...m, { sender: 'bot', text: `Transcribed: ${text}` }]);
+  await sendMessage(text);
+} catch (err) {
+  setMessages((m) => [...m, { sender: 'bot', text: '⚠️ Error transcribing audio' }]);
+}
 
   // Voice recording
   const startRecording = async () => {
