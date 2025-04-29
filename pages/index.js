@@ -2,16 +2,18 @@ import { useState, useRef } from 'react';
 
 export default function Home() {
   const [lang, setLang] = useState('hi-IN');
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([]); // { sender: 'user'|'bot', text }
   const [input, setInput] = useState('');
   const fileInputRef = useRef();
   const [recording, setRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
   const [audioChunks, setAudioChunks] = useState([]);
 
+  // Send text chat
   const sendMessage = async (text) => {
     if (!text) return;
-    setMessages((m) => [...m, { sender: 'user', text }]);
+    const userMsg = { sender: 'user', text };
+    setMessages((m) => [...m, userMsg]);
     setInput('');
     try {
       const res = await fetch('/api/agent/chat', {
@@ -30,20 +32,30 @@ export default function Home() {
       });
       const { reply } = await res.json();
       setMessages((m) => [...m, { sender: 'bot', text: reply }]);
+      // Speak it
       const utter = new SpeechSynthesisUtterance(reply);
       utter.lang = lang;
       speechSynthesis.speak(utter);
     } catch (err) {
-      setMessages((m) => [...m, { sender: 'bot', text: '⚠️ Error contacting API' }]);
+      console.error(err);
+      setMessages((m) => [
+        ...m,
+        { sender: 'bot', text: '⚠️ Error contacting API' }
+      ]);
     }
   };
 
+  // Handle Send
   const handleSend = () => sendMessage(input);
 
+  // Image upload → disease detection
   const handleImageUpload = async () => {
     const file = fileInputRef.current.files[0];
     if (!file) return alert('Select an image first');
-    setMessages((m) => [...m, { sender: 'user', text: `Uploaded image: ${file.name}` }]);
+    setMessages((m) => [
+      ...m,
+      { sender: 'user', text: `Uploaded image: ${file.name}` }
+    ]);
     const fd = new FormData();
     fd.append('image', file);
     try {
@@ -51,10 +63,15 @@ export default function Home() {
       const { diagnosis } = await res.json();
       setMessages((m) => [...m, { sender: 'bot', text: diagnosis }]);
     } catch (err) {
-      setMessages((m) => [...m, { sender: 'bot', text: '⚠️ Error analyzing image' }]);
+      console.error(err);
+      setMessages((m) => [
+        ...m,
+        { sender: 'bot', text: '⚠️ Error analyzing image' }
+      ]);
     }
   };
 
+  // Voice recording
   const startRecording = async () => {
     setRecording(true);
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -72,13 +89,17 @@ export default function Home() {
       setMessages((m) => [...m, { sender: 'user', text: '🎤 (voice message)' }]);
       const fd = new FormData();
       fd.append('audio', blob);
-      try:
+      try {
         const sttRes = await fetch('/api/agent/stt', { method: 'POST', body: fd });
         const { text } = await sttRes.json();
         setMessages((m) => [...m, { sender: 'bot', text: `Transcribed: ${text}` }]);
         await sendMessage(text);
       } catch (err) {
-        setMessages((m) => [...m, { sender: 'bot', text: '⚠️ Error transcribing audio' }]);
+        console.error(err);
+        setMessages((m) => [
+          ...m,
+          { sender: 'bot', text: '⚠️ Error transcribing audio' }
+        ]);
       }
     };
     mr.stop();
@@ -96,14 +117,17 @@ export default function Home() {
           </select>
         </label>
       </div>
+
       <div style={{
-        border: '1px solid #ccc', borderRadius: 4, height: 400, overflowY: 'scroll',
-        padding: 10, marginTop: 10, background: '#fafafa'
+        border: '1px solid #ccc', borderRadius: 4, height: 400,
+        overflowY: 'scroll', padding: 10, marginTop: 10, background: '#fafafa'
       }}>
         {messages.map((m, i) => (
-          <div key={i} style={{ textAlign: m.sender === 'user' ? 'right' : 'left', margin: '8px 0' }}>
+          <div key={i}
+               style={{ textAlign: m.sender === 'user' ? 'right' : 'left', margin: '8px 0' }}>
             <span style={{
-              display: 'inline-block', padding: '6px 10px', borderRadius: 4,
+              display: 'inline-block', padding: '6px 10px',
+              borderRadius: 4,
               background: m.sender === 'user' ? '#d1e7dd' : '#e2e3e5'
             }}>
               {m.text}
@@ -111,6 +135,7 @@ export default function Home() {
           </div>
         ))}
       </div>
+
       <div style={{ marginTop: 10 }}>
         <input
           style={{ width: '70%' }}
@@ -121,10 +146,12 @@ export default function Home() {
         />
         <button onClick={handleSend}>Send</button>
       </div>
+
       <div style={{ marginTop: 10 }}>
         <input type="file" accept="image/*" ref={fileInputRef} />
         <button onClick={handleImageUpload}>Analyze Disease</button>
       </div>
+
       <div style={{ marginTop: 10 }}>
         {!recording
           ? <button onClick={startRecording}>🎤 Start Recording</button>
@@ -132,5 +159,5 @@ export default function Home() {
         }
       </div>
     </div>
-);
+  );
 }
